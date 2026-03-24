@@ -23,6 +23,7 @@ function buildTaskCard(task) {
     const card = document.createElement("div");
     card.className = "task-card" + (task.status === "completed" ? " completed" : "");
     card.dataset.id = task.id;
+    card.dataset.priority = task.priority;
 
     const isOverdue = task.due_date && task.status === "pending" && new Date(task.due_date) < new Date();
     const dueDateLabel = task.due_date
@@ -38,6 +39,7 @@ function buildTaskCard(task) {
                 <div class="task-meta">
                     ${dueDateLabel}
                     <span class="task-badge ${task.status === "completed" ? "badge-completed" : "badge-pending"}">${task.status}</span>
+                    <span class="task-badge badge-${task.priority}>${task.priority}</span>
                 </div>
             </div>
             <div class="task-actions">
@@ -55,6 +57,7 @@ async function submitTask() {
     const title = document.getElementById("task-title").value.trim();
     const desc  = document.getElementById("task-desc").value.trim();
     const due   = document.getElementById("task-due").value;
+    const priority = document.getElementById("task-priority").value;
 
     if (!title) {
         showToast("Title is required.");
@@ -67,6 +70,7 @@ async function submitTask() {
     body.append("title", title);
     body.append("description", desc);
     body.append("due_date", due);
+    body.append("priority", priority);
 
     const res = await fetch("tasks.php", { method: "POST", body });
     const data = await res.json();
@@ -104,6 +108,7 @@ async function deleteTask(id) {
 
 function openEdit(id) {
     const card = document.querySelector(`.task-card[data-id="${id}"]`);
+    const priority = card.dataset.priority || "medium";
     const title = card.querySelector(".task-title").textContent;
     const descEl = card.querySelector(".task-desc");
     const desc = descEl ? descEl.textContent : "";
@@ -119,6 +124,7 @@ function openEdit(id) {
     document.getElementById("task-title").value = title;
     document.getElementById("task-desc").value = desc;
     document.getElementById("task-due").value = due;
+    document.getElementById("task-priority").value = priority;
     document.getElementById("form-title").textContent = "Edit Task";
     document.getElementById("submit-btn").textContent = "Save Changes";
     document.getElementById("cancel-btn").style.display = "flex";
@@ -134,6 +140,7 @@ function resetForm() {
     document.getElementById("task-title").value = "";
     document.getElementById("task-desc").value = "";
     document.getElementById("task-due").value = "";
+    document.getElementById("task-priority").value = "medium";
     document.getElementById("form-title").textContent = "Add New Task";
     document.getElementById("submit-btn").textContent = "Add Task";
     document.getElementById("cancel-btn").style.display = "none";

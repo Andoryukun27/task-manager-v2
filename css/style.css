@@ -445,3 +445,42 @@ body {
     opacity: 1;
     transform: translateY(0);
 }
+
+.badge-high {
+    background: #fdecea;
+    color: #c0392b;
+}
+
+.badge-medium {
+    background: #fef9ec;
+    color: #b7770d;
+}
+
+.badge-low {
+    background: #edf7f2;
+    color: #2a7a4b;
+}
+
+.field-group select {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: "Dm-Sans", sans-serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6460' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+}
+
+.field-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(200, 98, 42, 0.12);
+    background-color: #fff;
+}

@@ -25,14 +25,15 @@ if ($action === "create") {
     $title       = trim($_POST["title"] ?? "");
     $description = trim($_POST["description"] ?? "");
     $due_date    = $_POST["due_date"] ?? null;
+    $priority    = $_POST["priority"] ?? "medium";
 
     if ($title === "") {
         echo json_encode(["error" => "Title is required"]);
         exit;
     }
 
-    $stmt = $conn->prepare("INSERT INTO tasks (title, description, due_date) VALUES (?, ?, ?)");
-    $stmt->bind_param("sss", $title, $description, $due_date);
+    $stmt = $conn->prepare("INSERT INTO tasks (title, description, due_date, priority) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("ssss", $title, $description, $due_date, $priority);
     $stmt->execute();
     echo json_encode(["success" => true, "id" => $conn->insert_id]);
     $stmt->close();
@@ -43,14 +44,15 @@ if ($action === "update") {
     $title       = trim($_POST["title"] ?? "");
     $description = trim($_POST["description"] ?? "");
     $due_date    = $_POST["due_date"] ?? null;
+    $priority    = $_POST["priority"] ?? "medium";
 
     if ($id === 0 || $title === "") {
         echo json_encode(["error" => "ID and title are required"]);
         exit;
     }
 
-    $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, due_date = ? WHERE id = ?");
-    $stmt->bind_param("sssi", $title, $description, $due_date, $id);
+    $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ? WHERE id = ?");
+    $stmt->bind_param("ssssi", $title, $description, $due_date, $priority, $id);
     $stmt->execute();
     echo json_encode(["success" => true]);
     $stmt->close();
