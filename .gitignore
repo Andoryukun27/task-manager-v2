@@ -1,0 +1,30 @@
+# Database credentials — never commit real passwords
+db.php
+
+# Environment config files
+.env
+.env.local
+.env.production
+
+# OS junk files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE folders
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# PHP error logs
+*.log
+error_log
+
+# XAMPP / Laragon server files
+/logs/
+/temp/
+
+# Node (if you ever add a build tool)
+node_modules/
+package-lock.json
