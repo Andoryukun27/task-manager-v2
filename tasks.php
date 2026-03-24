@@ -1,0 +1,89 @@
+<?php
+header("Content-Type: application/json");
+require_once "db.php";
+
+$action = $_POST["action"] ?? $_GET["action"] ?? "";
+
+if ($action === "read") {
+    $filter = $_GET["filter"] ?? "all";
+
+    if ($filter === "pending" || $filter === "completed") {
+        $stmt = $conn->prepare("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC");
+        $stmt->bind_param("s", $filter);
+    } else {
+        $stmt = $conn->prepare("SELECT * FROM tasks ORDER BY created_at DESC");
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $tasks = $result->fetch_all(MYSQLI_ASSOC);
+    echo json_encode($tasks);
+    $stmt->close();
+}
+
+if ($action === "create") {
+    $title       = trim($_POST["title"] ?? "");
+    $description = trim($_POST["description"] ?? "");
+    $due_date    = $_POST["due_date"] ?? null;
+
+    if ($title === "") {
+        echo json_encode(["error" => "Title is required"]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("INSERT INTO tasks (title, description, due_date) VALUES (?, ?, ?)");
+    $stmt->bind_param("sss", $title, $description, $due_date);
+    $stmt->execute();
+    echo json_encode(["success" => true, "id" => $conn->insert_id]);
+    $stmt->close();
+}
+
+if ($action === "update") {
+    $id          = intval($_POST["id"] ?? 0);
+    $title       = trim($_POST["title"] ?? "");
+    $description = trim($_POST["description"] ?? "");
+    $due_date    = $_POST["due_date"] ?? null;
+
+    if ($id === 0 || $title === "") {
+        echo json_encode(["error" => "ID and title are required"]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, due_date = ? WHERE id = ?");
+    $stmt->bind_param("sssi", $title, $description, $due_date, $id);
+    $stmt->execute();
+    echo json_encode(["success" => true]);
+    $stmt->close();
+}
+
+if ($action === "delete") {
+    $id = intval($_POST["id"] ?? 0);
+
+    if ($id === 0) {
+        echo json_encode(["error" => "ID is required"]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("DELETE FROM tasks WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    echo json_encode(["success" => true]);
+    $stmt->close();
+}
+
+if ($action === "toggle") {
+    $id = intval($_POST["id"] ?? 0);
+
+    if ($id === 0) {
+        echo json_encode(["error" => "ID is required"]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("UPDATE tasks SET status = IF(status = 'pending', 'completed', 'pending') WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    echo json_encode(["success" => true]);
+    $stmt->close();
+}
+
+$conn->close();
