@@ -67,7 +67,14 @@
             <section class="tasks-section">
 
                 <div class="tasks-toolbar">
-                    <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
+                    <div class="toolbar-row">
+                        <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
+                        <select id="sort-select" onchange="document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
+                            <option value="created_at">Date Created</option>
+                            <option value="due_date">Due Date</option>
+                            <option value="title">Title</option>
+                        </select>
+                    </div>
                     <div class="filter-bar">
                         <button class="filter-btn active" data-filter="all" onclick="setFilter(this)">All</button>
                         <button class="filter-btn" data-filter="pending" onclick="setFilter(this)">Pending</button>

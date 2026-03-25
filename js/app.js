@@ -5,7 +5,8 @@ async function loadTasks() {
     const list = document.getElementById("task-list");
     list.innerHTML = '<div class="loading">Loading tasks...</div>';
 
-    const res = await fetch("tasks.php?action=read&filter=" + currentFilter);
+    const sort = document.getElementById("sort-select").value;
+    const res = await fetch("tasks.php?action=read&filter=" + currentFilter + "&sort=" + sort);
     const tasks = await res.json();
 
     if (!tasks.length) {
@@ -50,7 +51,7 @@ function buildTaskCard(task) {
                 <div class="task-meta">
                     ${dueDateLabel}
                     <span class="task-badge ${task.status === "completed" ? "badge-completed" : "badge-pending"}">${task.status}</span>
-                    <span class="task-badge badge-${task.priority}>${task.priority}</span>
+                    <span class="task-badge badge-${task.priority}">${task.priority}</span>
                 </div>
             </div>
             <div class="task-actions">
@@ -233,10 +234,10 @@ function searchTasks() {
     noResults.classList.toggle("visible", visible === 0 && query !== "");
 }
 
-document.getElementById("modal-confirm").addEventListener("click", confirmDelete);
+document.getElementById("modal-delete").addEventListener("click", confirmDelete);
 document.getElementById("modal-cancel").addEventListener("click", closeModal);
 
-document.getElementById("delete-modal").addEventListener("click", function(e) {
+document.getElementById("delete-modal").addEventListener("click", function (e) {
     if (e.target === this) closeModal();
 });
 

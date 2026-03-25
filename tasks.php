@@ -6,12 +6,20 @@ $action = $_POST["action"] ?? $_GET["action"] ?? "";
 
 if ($action === "read") {
     $filter = $_GET["filter"] ?? "all";
+    $sort = $_GET["sort"] ?? "created_at";
+
+    $allowed_sorts = ["created_at", "due_date", "title"];
+    if (!in_array($sort, $allowed_sorts)) {
+        $sort = "created_at";
+    }
+
+    $order = $sort === "title" ? "ASC" : "DESC";
 
     if ($filter === "pending" || $filter === "completed") {
-        $stmt = $conn->prepare("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC");
+        $stmt = $conn->prepare("SELECT * FROM tasks WHERE status = ? ORDER BY $sort $order");
         $stmt->bind_param("s", $filter);
     } else {
-        $stmt = $conn->prepare("SELECT * FROM tasks ORDER BY created_at DESC");
+        $stmt = $conn->prepare("SELECT * FROM tasks ORDER BY $sort $order");
     }
 
     $stmt->execute();
@@ -22,10 +30,10 @@ if ($action === "read") {
 }
 
 if ($action === "create") {
-    $title       = trim($_POST["title"] ?? "");
+    $title = trim($_POST["title"] ?? "");
     $description = trim($_POST["description"] ?? "");
-    $due_date    = $_POST["due_date"] ?? null;
-    $priority    = $_POST["priority"] ?? "medium";
+    $due_date = $_POST["due_date"] ?? null;
+    $priority = $_POST["priority"] ?? "medium";
 
     if ($title === "") {
         echo json_encode(["error" => "Title is required"]);
@@ -40,11 +48,11 @@ if ($action === "create") {
 }
 
 if ($action === "update") {
-    $id          = intval($_POST["id"] ?? 0);
-    $title       = trim($_POST["title"] ?? "");
+    $id = intval($_POST["id"] ?? 0);
+    $title = trim($_POST["title"] ?? "");
     $description = trim($_POST["description"] ?? "");
-    $due_date    = $_POST["due_date"] ?? null;
-    $priority    = $_POST["priority"] ?? "medium";
+    $due_date = $_POST["due_date"] ?? null;
+    $priority = $_POST["priority"] ?? "medium";
 
     if ($id === 0 || $title === "") {
         echo json_encode(["error" => "ID and title are required"]);
