@@ -64,10 +64,10 @@ function buildTaskCard(task) {
 }
 
 async function submitTask() {
-    const id    = document.getElementById("task-id").value;
+    const id = document.getElementById("task-id").value;
     const title = document.getElementById("task-title").value.trim();
-    const desc  = document.getElementById("task-desc").value.trim();
-    const due   = document.getElementById("task-due").value;
+    const desc = document.getElementById("task-desc").value.trim();
+    const due = document.getElementById("task-due").value;
     const priority = document.getElementById("task-priority").value;
 
     if (!title) {
@@ -107,17 +107,30 @@ async function toggleTask(id) {
     loadCounts();
 }
 
-async function deleteTask(id) {
-    if (!confirm("Delete this task?")) return;
+let pendingDeleteId = null;
+
+function deleteTask(id) {
+    pendingDeleteId = id;
+    document.getElementById("delete-modal").classList.add("open");
+}
+
+async function confirmDelete() {
+    if (!pendingDeleteId) return;
 
     const body = new FormData();
     body.append("action", "delete");
-    body.append("id", id);
+    body.append("id", pendingDeleteId);
 
     await fetch("tasks.php", { method: "POST", body });
+    closeModal();
     showToast("Task deleted.");
     loadTasks();
     loadCounts();
+}
+
+function closeModal() {
+    document.getElementById("delete-modal").classList.remove("open");
+    pendingDeleteId = null;
 }
 
 function openEdit(id) {
@@ -208,7 +221,7 @@ function searchTasks() {
     let visible = 0;
 
     cards.forEach(card => {
-        const title =  card.querySelector(".task-title").textContent.toLowerCase();
+        const title = card.querySelector(".task-title").textContent.toLowerCase();
         const descEl = card.querySelector(".task-desc");
         const desc = descEl ? descEl.textContent.toLowerCase() : "";
         const matches = title.includes(query) || desc.includes(query);
@@ -219,6 +232,13 @@ function searchTasks() {
     const noResults = document.getElementById("no-results");
     noResults.classList.toggle("visible", visible === 0 && query !== "");
 }
+
+document.getElementById("modal-confirm").addEventListener("click", confirmDelete);
+document.getElementById("modal-cancel").addEventListener("click", closeModal);
+
+document.getElementById("delete-modal").addEventListener("click", function(e) {
+    if (e.target === this) closeModal();
+});
 
 loadTasks();
 loadCounts();

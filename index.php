@@ -86,6 +86,18 @@
 
     </div>
 
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-icon">🗑</div>
+            <h3 class="modal-title">Delete this task?</h3>
+            <p class="modal-body">This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+                <button class="btn btn-danger" id="modal-delete">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast"></div>
 
     <script src="js/app.js"></script>
