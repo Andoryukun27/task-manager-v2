@@ -66,13 +66,17 @@
 
             <section class="tasks-section">
 
-                <div class="filter-bar">
-                    <button class="filter-btn active" data-filter="all" onclick="setFilter(this)">All</button>
-                    <button class="filter-btn" data-filter="pending" onclick="setFilter(this)">Pending</button>
-                    <button class="filter-btn" data-filter="completed" onclick="setFilter(this)">Completed</button>
+                <div class="tasks-toolbar">
+                    <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
+                    <div class="filter-bar">
+                        <button class="filter-btn active" data-filter="all" onclick="setFilter(this)">All</button>
+                        <button class="filter-btn" data-filter="pending" onclick="setFilter(this)">Pending</button>
+                        <button class="filter-btn" data-filter="completed" onclick="setFilter(this)">Completed</button>
+                    </div>
                 </div>
 
                 <div id="task-list" class="task-list">
+                    <p class="no-results" id="no-results">No tasks match your search.</p>
                     <div class="loading">Loading tasks...</div>
                 </div>
 

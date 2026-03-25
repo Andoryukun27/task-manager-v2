@@ -153,6 +153,7 @@ function setFilter(btn) {
     document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     currentFilter = btn.dataset.filter;
+    document.getElementById("search-input").value = "";
     loadTasks();
 }
 
@@ -186,5 +187,25 @@ function showToast(msg) {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
 }
+
+function searchTasks() {
+    const query = document.getElementById("search-input").value.toLowerCase().trim();
+    const cards = document.querySelectorAll(".task-card");
+    let visible = 0;
+
+    cards.forEach(card => {
+        const title =  card.querySelector(".task-title").textContent.toLowerCase();
+        const descEl = card.querySelector(".task-desc");
+        const desc = descEl ? descEl.textContent.toLowerCase() : "";
+        const matches = title.includes(query) || desc.includes(query);
+        card.classList.toggle("hidden", !matches);
+        if (matches) visible++;
+    });
+
+    const noResults = document.getElementById("no-results");
+    noResults.classList.toggle("visible", visible === 0 && query !== "");
+}
+
+
 
 loadTasks();

@@ -202,7 +202,6 @@ body {
 .filter-bar {
     display: flex;
     gap: 8px;
-    margin-bottom: 20px;
     background: var(--surface);
     padding: 6px;
     border-radius: var(--radius-sm);
@@ -483,4 +482,49 @@ body {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(200, 98, 42, 0.12);
     background-color: #fff;
+}
+
+.tasks-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+#search-input {
+    width: 100%;
+    border: 1.5px solid var (--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: "DM Sans", sans-serif;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--surface);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(200, 98, 42, 0.12);
+}
+
+#search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.task-card.hidden {
+    display: none;
+}
+
+.no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+    display: none;
+}
+
+.no-results.visible {
+    display: block;
 }
