@@ -88,4 +88,17 @@ if ($action === "toggle") {
     $stmt->close();
 }
 
+if ($action === "counts") {
+    $result = $conn->query("SELECT status, COUNT(*) as total FROM tasks GROUP BY status");
+    $rows = $result->fetch_all(MYSQLI_ASSOC);
+
+    $counts = ["all" => 0, "pending" => 0, "completed" => 0];
+    foreach ($rows as $row) {
+        $counts[$row["status"]] = $row["total"];
+        $counts["all"] += $row["total"];
+    }
+
+    echo json_encode($counts);
+}
+
 $conn->close();

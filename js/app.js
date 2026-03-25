@@ -19,6 +19,17 @@ async function loadTasks() {
     });
 }
 
+async function loadCounts() {
+    const res = await fetch("tasks.php?action=counts");
+    const counts = await res.json();
+
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+        const filter = btn.dataset.filter;
+        const n = counts[filter] ?? 0;
+        btn.textContent = filter.charAt(0).toUpperCase() + filter.slice(1) + (n > 0 ? ` (${n})` : "");
+    });
+}
+
 function buildTaskCard(task) {
     const card = document.createElement("div");
     card.className = "task-card" + (task.status === "completed" ? " completed" : "");
@@ -83,6 +94,7 @@ async function submitTask() {
     showToast(id ? "Task updated." : "Task added.");
     resetForm();
     loadTasks();
+    loadCounts();
 }
 
 async function toggleTask(id) {
@@ -92,6 +104,7 @@ async function toggleTask(id) {
 
     await fetch("tasks.php", { method: "POST", body });
     loadTasks();
+    loadCounts();
 }
 
 async function deleteTask(id) {
@@ -104,6 +117,7 @@ async function deleteTask(id) {
     await fetch("tasks.php", { method: "POST", body });
     showToast("Task deleted.");
     loadTasks();
+    loadCounts();
 }
 
 function openEdit(id) {
@@ -206,6 +220,5 @@ function searchTasks() {
     noResults.classList.toggle("visible", visible === 0 && query !== "");
 }
 
-
-
 loadTasks();
+loadCounts();
