@@ -1,5 +1,6 @@
 <?php
 session_start();
+
 if (isset($_SESSION["user_id"])) {
     header("Location: index.php");
     exit;
@@ -19,7 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if ($mode === "register") {
         if ($username === "" || $password === "") {
             $error = "All fields are required.";
-        } elseif (strlen(($password) < 6)) {
+        } elseif (strlen($password) < 6) {
             $error = "Password must be at least 6 characters.";
         } else {
             $check = $conn->prepare("SELECT id FROM users WHERE username = ?");
@@ -42,7 +43,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
     } else {
         if ($username === "" || $password === "") {
-            $error = "All fields are rquired.";
+            $error = "All fields are required.";
         } else {
             $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
             $stmt->bind_param("s", $username);
@@ -65,17 +66,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tasks Flow - <?= $mode === "register" ? "Register" : "Sign In" ?></title>
+    <title>TaskFlow — <?= $mode === "register" ? "Register" : "Sign In" ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap"
-        rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
     <div class="auth-shell">
         <div class="auth-card">
@@ -87,8 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             <div class="auth-tabs">
                 <a href="login.php" class="auth-tab <?= $mode !== "register" ? "active" : "" ?>">Sign In</a>
-                <a href="login.php?mode=register"
-                    class="auth-tab <?= $mode === "register" ? "active" : "" ?>">Register</a>
+                <a href="login.php?mode=register" class="auth-tab <?= $mode === "register" ? "active" : "" ?>">Register</a>
             </div>
 
             <?php if ($error): ?>
@@ -109,8 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 </div>
 
                 <div class="field-group">
-                    <label for="password">Password
-                        <?= $mode === "register" ? '<span class="auth-hint">(min. 6 characters)</span>' : "" ?></label>
+                    <label for="password">Password <?= $mode === "register" ? '<span class="auth-hint">(min. 6 characters)</span>' : "" ?></label>
                     <input type="password" name="password" id="password" placeholder="Enter your password"
                         autocomplete="<?= $mode === "register" ? "new-password" : "current-password" ?>" required>
                 </div>
@@ -123,5 +119,4 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
     </div>
 </body>
-
 </html>
