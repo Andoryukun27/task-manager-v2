@@ -90,8 +90,12 @@ requireLogin(); ?>
                 </div>
 
                 <div id="task-list" class="task-list">
-                    <p class="no-results" id="no-results">No tasks match your search.</p>
                     <div class="loading">Loading tasks...</div>
+                </div>
+                <p class="no-results" id="no-results">No tasks match your search.</p>
+                <div class="load-more-wrap">
+                    <button id="load-more-btn" class="btn btn-ghost" onclick="loadMore()" style="display:none">Load
+                        more</button>
                 </div>
 
             </section>

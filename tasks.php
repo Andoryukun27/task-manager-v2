@@ -10,6 +10,8 @@ $action = $_POST["action"] ?? $_GET["action"] ?? "";
 if ($action === "read") {
     $filter = $_GET["filter"] ?? "all";
     $sort = $_GET["sort"] ?? "created_at";
+    $offset = max(0, intval($_GET["offset"] ?? 0));
+    $fetch = 11;
 
     $allowed_sorts = ["created_at", "due_date", "title"];
     if (!in_array($sort, $allowed_sorts)) {
@@ -19,17 +21,23 @@ if ($action === "read") {
     $order = $sort === "title" ? "ASC" : "DESC";
 
     if ($filter === "pending" || $filter === "completed") {
-        $stmt = $conn->prepare("SELECT * FROM tasks WHERE user_id = ? AND status = ? ORDER BY $sort $order");
-        $stmt->bind_param("is", $uid, $filter);
+        $stmt = $conn->prepare("SELECT * FROM tasks WHERE status = ? ORDER BY $sort $order LIMIT ? OFFSET ?");
+        $stmt->bind_param("sii", $filter, $fetch, $offset);
     } else {
-        $stmt = $conn->prepare("SELECT * FROM tasks WHERE user_id = ? ORDER BY $sort $order");
-        $stmt->bind_param("i", $uid);
+        $stmt = $conn->prepare("SELECT * FROM tasks ORDER BY $sort $order LIMIT ? OFFSET ?");
+        $stmt->bind_param("ii", $fetch, $offset);
     }
 
     $stmt->execute();
     $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    echo json_encode($tasks);
     $stmt->close();
+
+    $has_more = count($tasks) === $fetch;
+    if ($has_more) {
+        array_pop($tasks);
+    }
+
+    echo json_encode(["tasks" => $tasks, "has_more" => $has_more]);
 }
 
 if ($action === "create") {

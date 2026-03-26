@@ -1,23 +1,44 @@
 let currentFilter = "all";
+let currentOffset = 0;
 let editingId = null;
 
-async function loadTasks() {
+async function loadTasks(append = false) {
     const list = document.getElementById("task-list");
-    list.innerHTML = '<div class="loading">Loading tasks...</div>';
+    const btn = document.getElementById("load-more-btn");
 
-    const sort = document.getElementById("sort-select").value;
-    const res = await fetch("tasks.php?action=read&filter=" + currentFilter + "&sort=" + sort);
-    const tasks = await res.json();
-
-    if (!tasks.length) {
-        list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9744;</div><p>No tasks here yet.</p></div>';
-        return;
+    if (!append) {
+        currentOffset = 0;
+        list.innerHTML = '<div class="loading">Loading tasks...</div>';
+        btn.style.display = "none";
+    } else {
+        btn.disabled = true;
+        btn.textContent = "Loading...";
     }
 
-    list.innerHTML = "";
-    tasks.forEach(task => {
-        list.appendChild(buildTaskCard(task));
-    });
+    const sort = document.getElementById("sort-select").value;
+    const url = "tasks.php?action=read&filter=" + currentFilter + "&sort=" + sort + "&offset=" + currentOffset;
+    const res = await fetch(url);
+    const data = await res.json();
+    const tasks = data.tasks;
+
+    if (!append) {
+        list.innerHTML = "";
+    }
+
+    if (tasks.length === 0 && !append) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9744;</div><p>No tasks here yet.</p></div>';
+    } else {
+        tasks.forEach(task => list.appendChild(buildTaskCard(task)));
+        currentOffset += tasks.length;
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Load more";
+    btn.style.display = data.has_more ? "block" : "none";
+}
+
+function loadMore() {
+    loadTasks(true);
 }
 
 async function loadCounts() {
