@@ -1,3 +1,5 @@
+<?php require_once "auth.php";
+requireLogin(); ?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -22,6 +24,10 @@
                     <h1>TaskFlow</h1>
                 </div>
                 <p class="brand-sub">Stay on top of everything</p>
+                <div class="header-user">
+                    <span class="header-username">👤 <?= htmlspecialchars($_SESSION["username"]) ?></span>
+                    <a href="logout.php" class="btn btn-ghost btn-sm">Sign out</a>
+                </div>
             </div>
         </header>
 
@@ -69,7 +75,8 @@
                 <div class="tasks-toolbar">
                     <div class="toolbar-row">
                         <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
-                        <select id="sort-select" onchange="document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
+                        <select id="sort-select"
+                            onchange="document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
                             <option value="created_at">Date Created</option>
                             <option value="due_date">Due Date</option>
                             <option value="title">Title</option>

@@ -1,12 +1,15 @@
 <?php
 header("Content-Type: application/json");
+require_once "auth.php";
+requireLogin();
 require_once "db.php";
 
+$uid = (int) $_SESSION["user_id"];
 $action = $_POST["action"] ?? $_GET["action"] ?? "";
 
 if ($action === "read") {
     $filter = $_GET["filter"] ?? "all";
-    $sort   = $_GET["sort"]   ?? "created_at";
+    $sort = $_GET["sort"] ?? "created_at";
 
     $allowed_sorts = ["created_at", "due_date", "title"];
     if (!in_array($sort, $allowed_sorts)) {
@@ -16,15 +19,15 @@ if ($action === "read") {
     $order = $sort === "title" ? "ASC" : "DESC";
 
     if ($filter === "pending" || $filter === "completed") {
-        $stmt = $conn->prepare("SELECT * FROM tasks WHERE status = ? ORDER BY $sort $order");
-        $stmt->bind_param("s", $filter);
+        $stmt = $conn->prepare("SELECT * FROM tasks WHERE user_id = ? AND status = ? ORDER BY $sort $order");
+        $stmt->bind_param("is", $uid, $filter);
     } else {
-        $stmt = $conn->prepare("SELECT * FROM tasks ORDER BY $sort $order");
+        $stmt = $conn->prepare("SELECT * FROM tasks WHERE user_id = ? ORDER BY $sort $order");
+        $stmt->bind_param("i", $uid);
     }
 
     $stmt->execute();
-    $result = $stmt->get_result();
-    $tasks = $result->fetch_all(MYSQLI_ASSOC);
+    $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     echo json_encode($tasks);
     $stmt->close();
 }
@@ -40,8 +43,8 @@ if ($action === "create") {
         exit;
     }
 
-    $stmt = $conn->prepare("INSERT INTO tasks (title, description, due_date, priority) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $title, $description, $due_date, $priority);
+    $stmt = $conn->prepare("INSERT INTO tasks (user_id, title, description, due_date, priority) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("issss", $uid, $title, $description, $due_date, $priority);
     $stmt->execute();
     echo json_encode(["success" => true, "id" => $conn->insert_id]);
     $stmt->close();
@@ -59,8 +62,8 @@ if ($action === "update") {
         exit;
     }
 
-    $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ? WHERE id = ?");
-    $stmt->bind_param("ssssi", $title, $description, $due_date, $priority, $id);
+    $stmt = $conn->prepare("UPDATE tasks SET title = ?, description = ?, due_date = ?, priority = ? WHERE id = ? AND user_id = ?");
+    $stmt->bind_param("ssssii", $title, $description, $due_date, $priority, $id, $uid);
     $stmt->execute();
     echo json_encode(["success" => true]);
     $stmt->close();
@@ -74,8 +77,8 @@ if ($action === "delete") {
         exit;
     }
 
-    $stmt = $conn->prepare("DELETE FROM tasks WHERE id = ?");
-    $stmt->bind_param("i", $id);
+    $stmt = $conn->prepare("DELETE FROM tasks WHERE id = ? AND user_id = ?");
+    $stmt->bind_param("ii", $id, $uid);
     $stmt->execute();
     echo json_encode(["success" => true]);
     $stmt->close();
@@ -89,21 +92,24 @@ if ($action === "toggle") {
         exit;
     }
 
-    $stmt = $conn->prepare("UPDATE tasks SET status = IF(status = 'pending', 'completed', 'pending') WHERE id = ?");
-    $stmt->bind_param("i", $id);
+    $stmt = $conn->prepare("UPDATE tasks SET status = IF(status = 'pending', 'completed', 'pending') WHERE id = ? AND user_id = ?");
+    $stmt->bind_param("ii", $id, $uid);
     $stmt->execute();
     echo json_encode(["success" => true]);
     $stmt->close();
 }
 
 if ($action === "counts") {
-    $result = $conn->query("SELECT status, COUNT(*) as total FROM tasks GROUP BY status");
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt = $conn->prepare("SELECT status, COUNT(*) as total FROM tasks WHERE user_id = ? GROUP BY status");
+    $stmt->bind_param("i", $uid);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
 
     $counts = ["all" => 0, "pending" => 0, "completed" => 0];
     foreach ($rows as $row) {
-        $counts[$row["status"]] = $row["total"];
-        $counts["all"] += $row["total"];
+        $counts[$row["status"]] = (int) $row["total"];
+        $counts["all"] += (int) $row["total"];
     }
 
     echo json_encode($counts);
