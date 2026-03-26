@@ -63,6 +63,26 @@ requireLogin(); ?>
                         </select>
                     </div>
 
+                    <div class="field-group">
+                        <label for="task-category">Category</label>
+                        <select id="task-category" onchange="onCategoryChange()">
+                            <option value="">— No category —</option>
+                            <option value="new">＋ Create new category...</option>
+                        </select>
+                        <div id="new-category-form" class="new-cat-form">
+                            <input type="text" id="new-cat-name" placeholder="Category name">
+                            <select id="new-cat-color">
+                                <option value="blue">🔵 Blue</option>
+                                <option value="green">🟢 Green</option>
+                                <option value="purple">🟣 Purple</option>
+                                <option value="red">🔴 Red</option>
+                                <option value="orange">🟠 Orange</option>
+                                <option value="yellow">🟡 Yellow</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm" onclick="createCategory()">Save category</button>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button id="cancel-btn" class="btn btn-ghost" style="display:none">Cancel</button>
                         <button id="submit-btn" class="btn btn-primary" onclick="submitTask()">Add Task</button>
@@ -76,7 +96,7 @@ requireLogin(); ?>
                     <div class="toolbar-row">
                         <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
                         <select id="sort-select"
-                            onchange="document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
+                            onchange="currentSearch=''; document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
                             <option value="created_at">Date Created</option>
                             <option value="due_date">Due Date</option>
                             <option value="title">Title</option>
@@ -86,6 +106,9 @@ requireLogin(); ?>
                         <button class="filter-btn active" data-filter="all" onclick="setFilter(this)">All</button>
                         <button class="filter-btn" data-filter="pending" onclick="setFilter(this)">Pending</button>
                         <button class="filter-btn" data-filter="completed" onclick="setFilter(this)">Completed</button>
+                    </div>
+                    <div class="filter-bar" id="category-filter-bar">
+                        <button class="filter-btn active" data-cat="0" onclick="setCategory(this)">All</button>
                     </div>
                 </div>
 
