@@ -6,7 +6,7 @@ $action = $_POST["action"] ?? $_GET["action"] ?? "";
 
 if ($action === "read") {
     $filter = $_GET["filter"] ?? "all";
-    $sort = $_GET["sort"] ?? "created_at";
+    $sort   = $_GET["sort"]   ?? "created_at";
 
     $allowed_sorts = ["created_at", "due_date", "title"];
     if (!in_array($sort, $allowed_sorts)) {
