@@ -94,16 +94,37 @@ async function loadCategories() {
     });
 }
 
+function getDateStatus(due_date, status) {
+    if (!due_date || status === "completed") return "";
+
+    const today = new Date();
+    const todayStr = today.getFullYear() + "-"
+        + String(today.getMonth() + 1).padStart(2, "0") + "-"
+        + String(today.getDate()).padStart(2, "0");
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const tomorrowStr = tomorrow.getFullYear() + "-"
+        + String(tomorrow.getMonth() + 1).padStart(2, "0") + "-"
+        + String(tomorrow.getDate()).padStart(2, "0");
+
+    if (due_date < todayStr) return "overdue";
+    if (due_date === todayStr) return "due-today";
+    if (due_date === tomorrowStr) return "due-soon";
+    return "";
+}
+
 function buildTaskCard(task) {
     const card = document.createElement("div");
-    card.className = "task-card" + (task.status === "completed" ? " completed" : "");
+    const dateStatus = getDateStatus(task.due_date, task.status);
+    card.className = "task-card" + (task.status === "completed" ? " completed" : (dateStatus ? " " + dateStatus : ""));
     card.dataset.id = task.id;
     card.dataset.priority = task.priority;
     card.dataset.categoryId = task.category_id ?? "";
 
-    const isOverdue = task.due_date && task.status === "pending" && new Date(task.due_date) < new Date();
+    const dateLabels = { overdue: " (overdue)", "due-today": " — Due today", "due-soon": " — Due tomorrow" };
     const dueDateLabel = task.due_date
-        ? `<span class="task-due ${isOverdue ? "overdue" : ""}">&#128197; ${formatDate(task.due_date)}${isOverdue ? " (overdue)" : ""}</span>`
+        ? `<span class="task-due ${dateStatus}">&#128197; ${formatDate(task.due_date)}${dateLabels[dateStatus] ?? ""}</span>`
         : "";
 
     const catBadge = task.category_name

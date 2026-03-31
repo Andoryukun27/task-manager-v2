@@ -351,6 +351,16 @@ body {
     font-weight: 500;
 }
 
+.task-due.due-today {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.task-due.due-soon {
+    color: #92400e;
+    font-weight: 500;
+}
+
 .task-badge {
     font-size: 11px;
     font-weight: 500;
@@ -374,6 +384,19 @@ body {
     display: flex;
     gap: 8px;
     flex-shrink: 0;
+}
+
+.task-card.overdue {
+    border-left: 3px solid var(--danger);
+}
+
+.task-card.due-today {
+    border-left: 3px solid #f59e0b;
+    background: #fffbf0;
+}
+
+.task-card.due-soon {
+    border-left: 3px solid #d97706;
 }
 
 .icon-btn {
