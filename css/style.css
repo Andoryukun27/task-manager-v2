@@ -871,3 +871,35 @@ body {
     cursor: not-allowed;
     transform: none;
 }
+
+.drag-handle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    cursor: grab;
+    font-size: 13px;
+    letter-spacing: -2px;
+    user-select: none;
+    margin-right: 2px;
+}
+
+.drag-enabled .drag-handle {
+    display: flex;
+}
+
+.drag-enabled .task-card {
+    cursor: default;
+}
+
+.drag-enabled .task-card[draggable="true"]:hover {
+    cursor: grab;
+}
+
+.task-card.dragging {
+    opacity: 0.35;
+    box-shadow: none;
+    border-style: dashed;
+}

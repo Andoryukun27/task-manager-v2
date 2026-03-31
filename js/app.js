@@ -4,6 +4,7 @@ let currentSearch = "";
 let currentOffset = 0;
 let editingId = null;
 let searchTimer = null;
+let draggedCard = null;
 
 async function loadTasks(append = false) {
     const list = document.getElementById("task-list");
@@ -48,6 +49,7 @@ async function loadTasks(append = false) {
     btn.disabled = false;
     btn.textContent = "Load more";
     btn.style.display = data.has_more ? "block" : "none";
+    initDragAndDrop();
 }
 
 function loadMore() {
@@ -133,6 +135,7 @@ function buildTaskCard(task) {
 
     card.innerHTML = `
         <div class="task-top">
+        <div class="drag-handle" title="Drag to reorder">&#8942;&#8942;</div>
             <div class="task-check" onclick="toggleTask(${task.id})">&#10003;</div>
             <div class="task-body">
                 <div class="task-title">${escapeHtml(task.title)}</div>
@@ -357,6 +360,78 @@ document.getElementById("delete-modal").addEventListener("click", function (e) {
     if (e.target === this) closeModal();
 });
 
+function getDragAfterElement(list, y) {
+    const cards = [...list.querySelectorAll(".task-card:not(.dragging)")];
+    return cards.reduce((closest, card) => {
+        const box = card.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset, element: card };
+        }
+        return closest;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function initDragAndDrop() {
+    const list = document.getElementById("task-list");
+    const sort = document.getElementById("sort-select").value;
+    const cards = list.querySelectorAll(".task-card");
+
+    if (sort !== "sort_order") {
+        list.classList.remove("drag-enabled");
+        cards.forEach(c => c.removeAttribute("draggable"));
+        return;
+    }
+
+    list.classList.add("drag-enabled");
+    cards.forEach(c => c.setAttribute("draggable", "true"));
+}
+
+async function saveOrder() {
+    const list = document.getElementById("task-list");
+    const ids = [...list.querySelectorAll(".task-card")].map(c => c.dataset.id);
+    const body = new FormData();
+    body.append("action", "reorder");
+    body.append("ids", JSON.stringify(ids));
+    await fetch("tasks.php", { method: "POST", body });
+}
+
+function setupDragAndDrop() {
+    const list = document.getElementById("task-list");
+
+    list.addEventListener("dragstart", e => {
+        const card = e.target.closest(".task-card");
+        if (!card) return;
+        draggedCard = card;
+        e.dataTransfer.effectAllowed = "move";
+        setTimeout(() => card.classList.add("dragging"), 0);
+    });
+
+    list.addEventListener("dragover", e => {
+        e.preventDefault();
+        if (!draggedCard) return;
+        e.dataTransfer.dropEffect = "move";
+        const after = getDragAfterElement(list, e.clientY);
+        if (after) {
+            list.insertBefore(draggedCard, after);
+        } else {
+            list.appendChild(draggedCard);
+        }
+    });
+
+    list.addEventListener("drop", e => {
+        e.preventDefault();
+    });
+
+    list.addEventListener("dragend", () => {
+        if (!draggedCard) return;
+        draggedCard.classList.remove("dragging");
+        draggedCard = null;
+        saveOrder();
+    });
+}
+
+setupDragAndDrop();
 loadCategories();
 loadTasks();
 loadCounts();

@@ -15,7 +15,7 @@ if ($action === "read") {
     $search = trim($_GET["search"] ?? "");
     $fetch = 11;
 
-    $allowed_sorts = ["created_at", "due_date", "title"];
+    $allowed_sorts = ["created_at", "due_date", "title", "sort_order"];
     if (!in_array($sort, $allowed_sorts))
         $sort = "created_at";
     $order = $sort === "title" ? "ASC" : "DESC";
@@ -44,28 +44,44 @@ if ($action === "read") {
         $params[] = $like;
     }
 
-    $types .= "ii";
-    $params[] = $fetch;
-    $params[] = $offset;
+    if ($sort === "sort_order") {
+        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color
+                FROM tasks t
+                LEFT JOIN categories c ON t.category_id = c.id
+                $where
+                ORDER BY t.sort_order ASC";
 
-    $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color
-            FROM tasks t
-            LEFT JOIN categories c ON t.category_id = c.id
-            $where
-            ORDER BY t.$sort $order
-            LIMIT ? OFFSET ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
 
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+        echo json_encode(["tasks" => $tasks, "has_more" => false]);
+    } else {
+        $types .= "ii";
+        $params[] = $fetch;
+        $params[] = $offset;
 
-    $has_more = count($tasks) === $fetch;
-    if ($has_more)
-        array_pop($tasks);
+        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color
+                FROM tasks t
+                LEFT JOIN categories c ON t.category_id = c.id
+                $where
+                ORDER BY t.$sort $order
+                LIMIT ? OFFSET ?";
 
-    echo json_encode(["tasks" => $tasks, "has_more" => $has_more]);
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+
+        $has_more = count($tasks) === $fetch;
+        if ($has_more)
+            array_pop($tasks);
+
+        echo json_encode(["tasks" => $tasks, "has_more" => $has_more]);
+    }
 }
 
 if ($action === "create") {
@@ -80,8 +96,14 @@ if ($action === "create") {
         exit;
     }
 
-    $stmt = $conn->prepare("INSERT INTO tasks (user_id, title, description, due_date, priority, category_id) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("issssi", $uid, $title, $description, $due_date, $priority, $category_id);
+    $stmt = $conn->prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tasks WHERE user_id = ?");
+    $stmt->bind_param("i", $uid);
+    $stmt->execute();
+    $sort_order = (int) $stmt->get_result()->fetch_row()[0];
+    $stmt->close();
+
+    $stmt = $conn->prepare("INSERT INTO tasks (user_id, sort_order, title, description, due_date, priority, category_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("iissssi", $uid, $sort_order, $title, $description, $due_date, $priority, $category_id);
     $stmt->execute();
     echo json_encode(["success" => true, "id" => $conn->insert_id]);
     $stmt->close();
@@ -177,6 +199,27 @@ if ($action === "create_category") {
     $stmt->execute();
     echo json_encode(["success" => true, "id" => $conn->insert_id]);
     $stmt->close();
+}
+
+if ($action === "reorder") {
+    $ids = json_decode($_POST["ids"] ?? "[]", true);
+
+    if (!is_array($ids)) {
+        echo json_encode(["error" => "Invalid data"]);
+        exit;
+    }
+
+    foreach ($ids as $order => $id) {
+        $id = intval($id);
+        if ($id === 0)
+            continue;
+        $stmt = $conn->prepare("UPDATE tasks SET sort_order = ? WHERE id = ? AND user_id = ?");
+        $stmt->bind_param("iii", $order, $id, $uid);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    echo json_encode(["success" => true]);
 }
 
 $conn->close();

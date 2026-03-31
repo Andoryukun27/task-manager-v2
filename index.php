@@ -97,6 +97,7 @@ requireLogin(); ?>
                         <input type="text" id="search-input" placeholder="🔍 Search tasks..." oninput="searchTasks()">
                         <select id="sort-select"
                             onchange="currentSearch=''; document.getElementById('search-input').value=''; loadTasks(); loadCounts();">
+                            <option value="sort_order">Custom Order</option>
                             <option value="created_at">Date Created</option>
                             <option value="due_date">Due Date</option>
                             <option value="title">Title</option>
