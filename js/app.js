@@ -1,437 +1,538 @@
-let currentFilter = "all";
-let currentCategory = 0;
-let currentSearch = "";
-let currentOffset = 0;
-let editingId = null;
-let searchTimer = null;
-let draggedCard = null;
+const { useState, useEffect, useRef } = React;
 
-async function loadTasks(append = false) {
-    const list = document.getElementById("task-list");
-    const btn = document.getElementById("load-more-btn");
-    const noResults = document.getElementById("no-results");
-
-    if (!append) {
-        currentOffset = 0;
-        list.innerHTML = '<div class="loading">Loading tasks...</div>';
-        btn.style.display = "none";
-        noResults.classList.remove("visible");
-    } else {
-        btn.disabled = true;
-        btn.textContent = "Loading...";
-    }
-
-    const sort = document.getElementById("sort-select").value;
-    const url = "tasks.php?action=read"
-        + "&filter=" + currentFilter
-        + "&sort=" + sort
-        + "&offset=" + currentOffset
-        + "&category_id=" + currentCategory
-        + "&search=" + encodeURIComponent(currentSearch);
-
+// ─── API helpers ──────────────────────────────────────────────────────────────
+//
+// These replace all the fetch() calls scattered through the old app.js.
+// Each function maps to one HTTP method. They all send/receive JSON.
+//
+// The old code used FormData (key=value pairs, like HTML forms).
+// REST APIs use JSON bodies instead — that's what Content-Type: application/json
+// and JSON.stringify() do here.
+//
+async function apiGet(url) {
     const res = await fetch(url);
-    const data = await res.json();
-    const tasks = data.tasks;
-
-    if (!append) list.innerHTML = "";
-
-    if (tasks.length === 0 && !append) {
-        if (currentSearch !== "") {
-            noResults.classList.add("visible");
-        } else {
-            list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9744;</div><p>No tasks here yet.</p></div>';
-        }
-    } else {
-        tasks.forEach(task => list.appendChild(buildTaskCard(task)));
-        currentOffset += tasks.length;
-    }
-
-    btn.disabled = false;
-    btn.textContent = "Load more";
-    btn.style.display = data.has_more ? "block" : "none";
-    initDragAndDrop();
+    if (res.status === 204) return null;
+    return res.json();
 }
 
-function loadMore() {
-    loadTasks(true);
+async function apiPost(url, data) {
+    const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    return res.json();
 }
 
-async function loadCounts() {
-    const res = await fetch("tasks.php?action=counts");
-    const counts = await res.json();
-
-    document.querySelectorAll(".filter-btn").forEach(btn => {
-        const filter = btn.dataset.filter;
-        if (!filter) return;
-        const n = counts[filter] ?? 0;
-        btn.textContent = filter.charAt(0).toUpperCase() + filter.slice(1) + (n > 0 ? ` (${n})` : "");
+async function apiPut(url, data) {
+    const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
     });
+    return res.json();
 }
 
-async function loadCategories() {
-    const res = await fetch("tasks.php?action=read_categories");
-    const cats = await res.json();
+async function apiPatch(url) {
+    const res = await fetch(url, { method: "PATCH" });
+    return res.json();
+}
 
-    const select = document.getElementById("task-category");
-    const savedValue = select.value;
-    select.innerHTML = '<option value="">— No category —</option>';
-    cats.forEach(cat => {
-        const opt = document.createElement("option");
-        opt.value = cat.id;
-        opt.textContent = cat.name;
-        select.appendChild(opt);
-    });
-    select.innerHTML += '<option value="new">＋ Create new category...</option>';
-    if (savedValue) select.value = savedValue;
+async function apiDelete(url) {
+    await fetch(url, { method: "DELETE" });
+}
 
-    const bar = document.getElementById("category-filter-bar");
-    bar.innerHTML = '<button class="filter-btn' + (currentCategory === 0 ? " active" : "") + '" data-cat="0" onclick="setCategory(this)">All</button>';
-    cats.forEach(cat => {
-        const btn = document.createElement("button");
-        btn.className = "filter-btn cat-pill cat-" + cat.color + (currentCategory === cat.id ? " active" : "");
-        btn.dataset.cat = cat.id;
-        btn.textContent = cat.name;
-        btn.onclick = function () { setCategory(this); };
-        bar.appendChild(btn);
-    });
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
+function formatDate(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function getDateStatus(due_date, status) {
     if (!due_date || status === "completed") return "";
-
-    const today = new Date();
-    const todayStr = today.getFullYear() + "-"
-        + String(today.getMonth() + 1).padStart(2, "0") + "-"
-        + String(today.getDate()).padStart(2, "0");
-
+    const today    = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
-    const tomorrowStr = tomorrow.getFullYear() + "-"
-        + String(tomorrow.getMonth() + 1).padStart(2, "0") + "-"
-        + String(tomorrow.getDate()).padStart(2, "0");
-
-    if (due_date < todayStr) return "overdue";
-    if (due_date === todayStr) return "due-today";
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    if (due_date < todayStr)    return "overdue";
+    if (due_date === todayStr)  return "due-today";
     if (due_date === tomorrowStr) return "due-soon";
     return "";
 }
 
-function buildTaskCard(task) {
-    const card = document.createElement("div");
-    const dateStatus = getDateStatus(task.due_date, task.status);
-    card.className = "task-card" + (task.status === "completed" ? " completed" : (dateStatus ? " " + dateStatus : ""));
-    card.dataset.id = task.id;
-    card.dataset.priority = task.priority;
-    card.dataset.categoryId = task.category_id ?? "";
+// ─── Toast ────────────────────────────────────────────────────────────────────
+//
+// In the old app, showToast() directly manipulated a DOM element.
+// Here, `message` is a piece of React state. When it's set, the component
+// re-renders with the "show" class. When it's cleared, the class is removed.
+//
+function Toast({ message }) {
+    return <div className={`toast ${message ? "show" : ""}`}>{message}</div>;
+}
 
-    const dateLabels = { overdue: " (overdue)", "due-today": " — Due today", "due-soon": " — Due tomorrow" };
-    const dueDateLabel = task.due_date
-        ? `<span class="task-due ${dateStatus}">&#128197; ${formatDate(task.due_date)}${dateLabels[dateStatus] ?? ""}</span>`
-        : "";
+// ─── DeleteModal ──────────────────────────────────────────────────────────────
 
-    const catBadge = task.category_name
-        ? `<span class="task-badge cat-pill cat-${task.category_color}">${escapeHtml(task.category_name)}</span>`
-        : "";
-
-    card.innerHTML = `
-        <div class="task-top">
-        <div class="drag-handle" title="Drag to reorder">&#8942;&#8942;</div>
-            <div class="task-check" onclick="toggleTask(${task.id})">&#10003;</div>
-            <div class="task-body">
-                <div class="task-title">${escapeHtml(task.title)}</div>
-                ${task.description ? `<div class="task-desc">${escapeHtml(task.description)}</div>` : ""}
-                <div class="task-meta">
-                    ${dueDateLabel}
-                    <span class="task-badge ${task.status === "completed" ? "badge-completed" : "badge-pending"}">${task.status}</span>
-                    <span class="task-badge badge-${task.priority}">${task.priority}</span>
-                    ${catBadge}
+function DeleteModal({ open, onConfirm, onCancel }) {
+    return (
+        <div
+            className={`modal-overlay ${open ? "open" : ""}`}
+            onClick={e => e.target === e.currentTarget && onCancel()}
+        >
+            <div className="modal">
+                <div className="modal-icon">🗑</div>
+                <h3 className="modal-title">Delete this task?</h3>
+                <p className="modal-body">This action cannot be undone.</p>
+                <div className="modal-actions">
+                    <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+                    <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
                 </div>
             </div>
-            <div class="task-actions">
-                <button class="icon-btn edit"   onclick="openEdit(${task.id})"   title="Edit">&#9998;</button>
-                <button class="icon-btn delete" onclick="deleteTask(${task.id})" title="Delete">&#128465;</button>
+        </div>
+    );
+}
+
+// ─── TaskCard ─────────────────────────────────────────────────────────────────
+//
+// In the old app, buildTaskCard() built a DOM element and returned it.
+// Here, TaskCard is a function that returns JSX — React's HTML-like syntax.
+// JSX looks like HTML but it compiles to JavaScript. For example:
+//   <div className="task-card"> becomes React.createElement("div", {className: "task-card"})
+//
+// Note: React uses "className" instead of "class" because "class" is a
+// reserved word in JavaScript.
+//
+function TaskCard({ task, onEdit, onDelete, onToggle }) {
+    const dateStatus = getDateStatus(task.due_date, task.status);
+    const cardClass  = [
+        "task-card",
+        task.status === "completed" ? "completed" : (dateStatus || ""),
+    ].filter(Boolean).join(" ");
+
+    const dateLabels = {
+        overdue:    " (overdue)",
+        "due-today": " — Due today",
+        "due-soon":  " — Due tomorrow",
+    };
+
+    return (
+        <div className={cardClass} data-id={task.id}>
+            <div className="task-top">
+                <div className="task-check" onClick={() => onToggle(task.id)}>✓</div>
+                <div className="task-body">
+                    <div className="task-title">{task.title}</div>
+                    {task.description && <div className="task-desc">{task.description}</div>}
+                    <div className="task-meta">
+                        {task.due_date && (
+                            <span className={`task-due ${dateStatus}`}>
+                                📅 {formatDate(task.due_date)}{dateLabels[dateStatus] ?? ""}
+                            </span>
+                        )}
+                        <span className={`task-badge ${task.status === "completed" ? "badge-completed" : "badge-pending"}`}>
+                            {task.status}
+                        </span>
+                        <span className={`task-badge badge-${task.priority}`}>{task.priority}</span>
+                        {task.category_name && (
+                            <span className={`task-badge cat-pill cat-${task.category_color}`}>
+                                {task.category_name}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="task-actions">
+                    <button className="icon-btn edit"   onClick={() => onEdit(task)}     title="Edit">✏</button>
+                    <button className="icon-btn delete" onClick={() => onDelete(task.id)} title="Delete">🗑</button>
+                </div>
             </div>
         </div>
-    `;
-    return card;
+    );
 }
 
-async function submitTask() {
-    const id = document.getElementById("task-id").value;
-    const title = document.getElementById("task-title").value.trim();
-    const desc = document.getElementById("task-desc").value.trim();
-    const due = document.getElementById("task-due").value;
-    const priority = document.getElementById("task-priority").value;
-    const category_id = document.getElementById("task-category").value;
+// ─── TaskForm ─────────────────────────────────────────────────────────────────
+//
+// This component manages its own local state for each field.
+// When `editing` changes (user clicks Edit on a task), a useEffect syncs
+// the form fields to that task's data.
+//
+// "Controlled inputs" is a key React concept: the input's value is always
+// driven by a state variable, and onChange updates that state variable.
+// This is the opposite of reading from the DOM when the form is submitted.
+//
+function TaskForm({ editing, categories, onSubmit, onCancel, onCategoryCreate }) {
+    const [title,       setTitle]       = useState("");
+    const [desc,        setDesc]        = useState("");
+    const [due,         setDue]         = useState("");
+    const [priority,    setPriority]    = useState("medium");
+    const [categoryId,  setCategoryId]  = useState("");
+    const [showNewCat,  setShowNewCat]  = useState(false);
+    const [newCatName,  setNewCatName]  = useState("");
+    const [newCatColor, setNewCatColor] = useState("blue");
 
-    if (!title) { showToast("Title is required."); return; }
-    if (category_id === "new") { showToast("Save your new category first."); return; }
+    useEffect(() => {
+        setTitle(editing?.title ?? "");
+        setDesc(editing?.description ?? "");
+        setDue(editing?.due_date ?? "");
+        setPriority(editing?.priority ?? "medium");
+        setCategoryId(String(editing?.category_id ?? ""));
+        setShowNewCat(false);
+    }, [editing]);
 
-    const body = new FormData();
-    body.append("action", id ? "update" : "create");
-    if (id) body.append("id", id);
-    body.append("title", title);
-    body.append("description", desc);
-    body.append("due_date", due);
-    body.append("priority", priority);
-    body.append("category_id", category_id);
-
-    const res = await fetch("tasks.php", { method: "POST", body });
-    const data = await res.json();
-
-    if (data.error) { showToast(data.error); return; }
-
-    showToast(id ? "Task updated." : "Task added.");
-    resetForm();
-    loadTasks();
-    loadCounts();
-}
-
-async function toggleTask(id) {
-    const body = new FormData();
-    body.append("action", "toggle");
-    body.append("id", id);
-    await fetch("tasks.php", { method: "POST", body });
-    loadTasks();
-    loadCounts();
-}
-
-let pendingDeleteId = null;
-
-function deleteTask(id) {
-    pendingDeleteId = id;
-    document.getElementById("delete-modal").classList.add("open");
-}
-
-async function confirmDelete() {
-    if (!pendingDeleteId) return;
-
-    const body = new FormData();
-    body.append("action", "delete");
-    body.append("id", pendingDeleteId);
-    await fetch("tasks.php", { method: "POST", body });
-    closeModal();
-    showToast("Task deleted.");
-    loadTasks();
-    loadCounts();
-}
-
-function closeModal() {
-    document.getElementById("delete-modal").classList.remove("open");
-    pendingDeleteId = null;
-}
-
-function openEdit(id) {
-    const card = document.querySelector(`.task-card[data-id="${id}"]`);
-    const priority = card.dataset.priority || "medium";
-    const catId = card.dataset.categoryId || "";
-    const title = card.querySelector(".task-title").textContent;
-    const descEl = card.querySelector(".task-desc");
-    const desc = descEl ? descEl.textContent : "";
-
-    const dueMeta = card.querySelector(".task-due");
-    let due = "";
-    if (dueMeta) {
-        const raw = dueMeta.textContent.replace("(overdue)", "").trim();
-        const parts = raw.split(" ").slice(1).join(" ");
-        due = parseDateForInput(parts);
+    function handleCategoryChange(val) {
+        setCategoryId(val);
+        setShowNewCat(val === "new");
     }
 
-    document.getElementById("task-id").value = id;
-    document.getElementById("task-title").value = title;
-    document.getElementById("task-desc").value = desc;
-    document.getElementById("task-due").value = due;
-    document.getElementById("task-priority").value = priority;
-    document.getElementById("task-category").value = catId;
-    document.getElementById("new-category-form").style.display = "none";
-    document.getElementById("form-title").textContent = "Edit Task";
-    document.getElementById("submit-btn").textContent = "Save Changes";
-    document.getElementById("cancel-btn").style.display = "flex";
-
-    document.getElementById("task-title").focus();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    editingId = id;
-}
-
-function resetForm() {
-    document.getElementById("task-id").value = "";
-    document.getElementById("task-title").value = "";
-    document.getElementById("task-desc").value = "";
-    document.getElementById("task-due").value = "";
-    document.getElementById("task-priority").value = "medium";
-    document.getElementById("task-category").value = "";
-    document.getElementById("new-category-form").style.display = "none";
-    document.getElementById("form-title").textContent = "Add New Task";
-    document.getElementById("submit-btn").textContent = "Add Task";
-    document.getElementById("cancel-btn").style.display = "none";
-    editingId = null;
-}
-
-document.getElementById("cancel-btn").addEventListener("click", resetForm);
-
-function setFilter(btn) {
-    document.querySelectorAll(".filter-btn[data-filter]").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentFilter = btn.dataset.filter;
-    currentSearch = "";
-    document.getElementById("search-input").value = "";
-    loadTasks();
-}
-
-function setCategory(btn) {
-    document.querySelectorAll(".filter-btn[data-cat]").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    currentCategory = parseInt(btn.dataset.cat) || 0;
-    currentSearch = "";
-    document.getElementById("search-input").value = "";
-    loadTasks();
-}
-
-function onCategoryChange() {
-    const val = document.getElementById("task-category").value;
-    document.getElementById("new-category-form").style.display = val === "new" ? "block" : "none";
-}
-
-async function createCategory() {
-    const name = document.getElementById("new-cat-name").value.trim();
-    const color = document.getElementById("new-cat-color").value;
-
-    if (!name) { showToast("Category name is required."); return; }
-
-    const body = new FormData();
-    body.append("action", "create_category");
-    body.append("name", name);
-    body.append("color", color);
-
-    const res = await fetch("tasks.php", { method: "POST", body });
-    const data = await res.json();
-
-    if (data.error) { showToast(data.error); return; }
-
-    document.getElementById("new-cat-name").value = "";
-    await loadCategories();
-    document.getElementById("task-category").value = data.id;
-    document.getElementById("new-category-form").style.display = "none";
-    showToast("Category created.");
-}
-
-function searchTasks() {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-        currentSearch = document.getElementById("search-input").value.trim();
-        loadTasks(false);
-    }, 350);
-}
-
-function formatDate(dateStr) {
-    const date = new Date(dateStr + "T00:00:00");
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function parseDateForInput(label) {
-    const d = new Date(label);
-    if (isNaN(d)) return "";
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-}
-
-function escapeHtml(str) {
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-}
-
-let toastTimer;
-function showToast(msg) {
-    const toast = document.getElementById("toast");
-    toast.textContent = msg;
-    toast.classList.add("show");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
-}
-
-document.getElementById("modal-delete").addEventListener("click", confirmDelete);
-document.getElementById("modal-cancel").addEventListener("click", closeModal);
-document.getElementById("delete-modal").addEventListener("click", function (e) {
-    if (e.target === this) closeModal();
-});
-
-function getDragAfterElement(list, y) {
-    const cards = [...list.querySelectorAll(".task-card:not(.dragging)")];
-    return cards.reduce((closest, card) => {
-        const box = card.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-            return { offset, element: card };
+    async function handleCreateCategory() {
+        if (!newCatName.trim()) return;
+        const result = await onCategoryCreate(newCatName.trim(), newCatColor);
+        if (result?.id) {
+            setCategoryId(String(result.id));
+            setNewCatName("");
+            setShowNewCat(false);
         }
-        return closest;
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function initDragAndDrop() {
-    const list = document.getElementById("task-list");
-    const sort = document.getElementById("sort-select").value;
-    const cards = list.querySelectorAll(".task-card");
-
-    if (sort !== "sort_order") {
-        list.classList.remove("drag-enabled");
-        cards.forEach(c => c.removeAttribute("draggable"));
-        return;
     }
 
-    list.classList.add("drag-enabled");
-    cards.forEach(c => c.setAttribute("draggable", "true"));
+    function handleSubmit() {
+        if (categoryId === "new") return;
+        onSubmit({ title, description: desc, due_date: due, priority, category_id: categoryId });
+    }
+
+    return (
+        <div className="form-card">
+            <h2 className="form-title">{editing ? "Edit Task" : "Add New Task"}</h2>
+
+            <div className="field-group">
+                <label>Title <span className="required">*</span></label>
+                <input
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="What needs to be done?"
+                />
+            </div>
+
+            <div className="field-group">
+                <label>Description</label>
+                <textarea
+                    value={desc}
+                    onChange={e => setDesc(e.target.value)}
+                    placeholder="Add details..."
+                    rows="3"
+                />
+            </div>
+
+            <div className="field-group">
+                <label>Due Date</label>
+                <input type="date" value={due} onChange={e => setDue(e.target.value)} />
+            </div>
+
+            <div className="field-group">
+                <label>Priority</label>
+                <select value={priority} onChange={e => setPriority(e.target.value)}>
+                    <option value="low">🟢 Low</option>
+                    <option value="medium">🟡 Medium</option>
+                    <option value="high">🔴 High</option>
+                </select>
+            </div>
+
+            <div className="field-group">
+                <label>Category</label>
+                <select value={categoryId} onChange={e => handleCategoryChange(e.target.value)}>
+                    <option value="">— No category —</option>
+                    {categories.map(c => (
+                        <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                    <option value="new">＋ Create new category...</option>
+                </select>
+
+                {showNewCat && (
+                    <div className="new-cat-form">
+                        <input
+                            value={newCatName}
+                            onChange={e => setNewCatName(e.target.value)}
+                            placeholder="Category name"
+                        />
+                        <select value={newCatColor} onChange={e => setNewCatColor(e.target.value)}>
+                            <option value="blue">🔵 Blue</option>
+                            <option value="green">🟢 Green</option>
+                            <option value="purple">🟣 Purple</option>
+                            <option value="red">🔴 Red</option>
+                            <option value="orange">🟠 Orange</option>
+                            <option value="yellow">🟡 Yellow</option>
+                        </select>
+                        <button className="btn btn-ghost btn-sm" onClick={handleCreateCategory}>
+                            Save category
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="form-actions">
+                {editing && (
+                    <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+                )}
+                <button className="btn btn-primary" onClick={handleSubmit}>
+                    {editing ? "Save Changes" : "Add Task"}
+                </button>
+            </div>
+        </div>
+    );
 }
 
-async function saveOrder() {
-    const list = document.getElementById("task-list");
-    const ids = [...list.querySelectorAll(".task-card")].map(c => c.dataset.id);
-    const body = new FormData();
-    body.append("action", "reorder");
-    body.append("ids", JSON.stringify(ids));
-    await fetch("tasks.php", { method: "POST", body });
-}
+// ─── App ──────────────────────────────────────────────────────────────────────
+//
+// This is the root component. All shared state lives here.
+// Child components receive data as "props" and call callback functions
+// (like onEdit, onDelete) to ask the parent to update state.
+//
+// This pattern — state up, callbacks down — is called "lifting state up"
+// and is the core data-flow pattern in React.
+//
+function App() {
+    const [tasks,          setTasks]          = useState([]);
+    const [categories,     setCategories]     = useState([]);
+    const [counts,         setCounts]         = useState({ all: 0, pending: 0, completed: 0 });
+    const [filter,         setFilter]         = useState("all");
+    const [categoryFilter, setCategoryFilter] = useState(0);
+    const [sort,           setSort]           = useState("created_at");
+    const [search,         setSearch]         = useState("");
+    const [offset,         setOffset]         = useState(0);
+    const [hasMore,        setHasMore]        = useState(false);
+    const [editing,        setEditing]        = useState(null);
+    const [deleteId,       setDeleteId]       = useState(null);
+    const [toast,          setToast]          = useState("");
+    const [refreshKey,     setRefreshKey]     = useState(0);
+    const searchTimer = useRef(null);
 
-function setupDragAndDrop() {
-    const list = document.getElementById("task-list");
+    function showToast(msg) {
+        setToast(msg);
+        setTimeout(() => setToast(""), 2800);
+    }
 
-    list.addEventListener("dragstart", e => {
-        const card = e.target.closest(".task-card");
-        if (!card) return;
-        draggedCard = card;
-        e.dataTransfer.effectAllowed = "move";
-        setTimeout(() => card.classList.add("dragging"), 0);
-    });
+    function refresh() {
+        setRefreshKey(k => k + 1);
+    }
 
-    list.addEventListener("dragover", e => {
-        e.preventDefault();
-        if (!draggedCard) return;
-        e.dataTransfer.dropEffect = "move";
-        const after = getDragAfterElement(list, e.clientY);
-        if (after) {
-            list.insertBefore(draggedCard, after);
+    // Load tasks whenever filter, category, sort, search, or refreshKey changes.
+    // useEffect runs after every render where one of its dependencies changed.
+    // The empty second argument [] would mean "run once on mount".
+    useEffect(() => {
+        async function load() {
+            const params = new URLSearchParams({
+                filter,
+                sort,
+                offset: 0,
+                category_id: categoryFilter,
+                search,
+            });
+            const data = await apiGet(`tasks.php?${params}`);
+            setTasks(data.tasks);
+            setOffset(data.tasks.length);
+            setHasMore(data.has_more);
+        }
+        load();
+    }, [filter, categoryFilter, sort, search, refreshKey]);
+
+    useEffect(() => {
+        async function loadCounts() {
+            const data = await apiGet("tasks.php?action=counts");
+            setCounts(data);
+        }
+        loadCounts();
+    }, [refreshKey]);
+
+    useEffect(() => {
+        async function loadCategories() {
+            const data = await apiGet("categories.php");
+            setCategories(data);
+        }
+        loadCategories();
+    }, []);
+
+    async function loadMore() {
+        const params = new URLSearchParams({
+            filter, sort, offset, category_id: categoryFilter, search,
+        });
+        const data = await apiGet(`tasks.php?${params}`);
+        setTasks(prev => [...prev, ...data.tasks]);
+        setOffset(prev => prev + data.tasks.length);
+        setHasMore(data.has_more);
+    }
+
+    async function handleSubmit({ title, description, due_date, priority, category_id }) {
+        if (!title.trim()) { showToast("Title is required."); return; }
+        if (editing) {
+            await apiPut(`tasks.php?id=${editing.id}`, { title, description, due_date, priority, category_id });
+            showToast("Task updated.");
         } else {
-            list.appendChild(draggedCard);
+            await apiPost("tasks.php", { title, description, due_date, priority, category_id });
+            showToast("Task added.");
         }
-    });
+        setEditing(null);
+        refresh();
+    }
 
-    list.addEventListener("drop", e => {
-        e.preventDefault();
-    });
+    async function handleToggle(id) {
+        await apiPatch(`tasks.php?id=${id}`);
+        refresh();
+    }
 
-    list.addEventListener("dragend", () => {
-        if (!draggedCard) return;
-        draggedCard.classList.remove("dragging");
-        draggedCard = null;
-        saveOrder();
-    });
+    async function handleDelete() {
+        await apiDelete(`tasks.php?id=${deleteId}`);
+        setDeleteId(null);
+        showToast("Task deleted.");
+        refresh();
+    }
+
+    async function handleCategoryCreate(name, color) {
+        const result = await apiPost("categories.php", { name, color });
+        if (result?.id) {
+            const data = await apiGet("categories.php");
+            setCategories(data);
+            showToast("Category created.");
+        }
+        return result;
+    }
+
+    function handleFilterChange(f) {
+        setFilter(f);
+        setSearch("");
+    }
+
+    function handleCategoryChange(catId) {
+        setCategoryFilter(catId);
+        setSearch("");
+    }
+
+    function handleSearchInput(val) {
+        clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => setSearch(val), 350);
+    }
+
+    function filterLabel(f) {
+        const n = counts[f] ?? 0;
+        return f.charAt(0).toUpperCase() + f.slice(1) + (n > 0 ? ` (${n})` : "");
+    }
+
+    return (
+        <div className="app-shell">
+
+            <header className="app-header">
+                <div className="header-inner">
+                    <div className="brand">
+                        <span className="brand-icon">✓</span>
+                        <h1>TaskFlow</h1>
+                    </div>
+                    <p className="brand-sub">Stay on top of everything</p>
+                    <div className="header-user">
+                        <span className="header-username">👤 {window.APP_DATA.username}</span>
+                        <a href="logout.php" className="btn btn-ghost btn-sm">Sign out</a>
+                    </div>
+                </div>
+            </header>
+
+            <main className="app-main">
+
+                <section className="form-section">
+                    <TaskForm
+                        editing={editing}
+                        categories={categories}
+                        onSubmit={handleSubmit}
+                        onCancel={() => setEditing(null)}
+                        onCategoryCreate={handleCategoryCreate}
+                    />
+                </section>
+
+                <section className="tasks-section">
+                    <div className="tasks-toolbar">
+                        <div className="toolbar-row">
+                            <input
+                                type="text"
+                                id="search-input"
+                                placeholder="🔍 Search tasks..."
+                                onChange={e => handleSearchInput(e.target.value)}
+                            />
+                            <select
+                                id="sort-select"
+                                defaultValue="created_at"
+                                onChange={e => setSort(e.target.value)}
+                            >
+                                <option value="sort_order">Custom Order</option>
+                                <option value="created_at">Date Created</option>
+                                <option value="due_date">Due Date</option>
+                                <option value="title">Title</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-bar">
+                            {["all", "pending", "completed"].map(f => (
+                                <button
+                                    key={f}
+                                    className={`filter-btn ${filter === f ? "active" : ""}`}
+                                    onClick={() => handleFilterChange(f)}
+                                >
+                                    {filterLabel(f)}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="filter-bar" id="category-filter-bar">
+                            <button
+                                className={`filter-btn ${categoryFilter === 0 ? "active" : ""}`}
+                                onClick={() => handleCategoryChange(0)}
+                            >
+                                All
+                            </button>
+                            {categories.map(c => (
+                                <button
+                                    key={c.id}
+                                    className={`filter-btn cat-pill cat-${c.color} ${categoryFilter === c.id ? "active" : ""}`}
+                                    onClick={() => handleCategoryChange(c.id)}
+                                >
+                                    {c.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="task-list">
+                        {tasks.length === 0 ? (
+                            search
+                                ? <p className="no-results visible">No tasks match your search.</p>
+                                : <div className="empty-state"><div className="empty-icon">☐</div><p>No tasks here yet.</p></div>
+                        ) : (
+                            tasks.map(task => (
+                                <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    onEdit={setEditing}
+                                    onDelete={setDeleteId}
+                                    onToggle={handleToggle}
+                                />
+                            ))
+                        )}
+                    </div>
+
+                    {hasMore && (
+                        <div className="load-more-wrap">
+                            <button className="btn btn-ghost" onClick={loadMore}>Load more</button>
+                        </div>
+                    )}
+                </section>
+
+            </main>
+
+            <DeleteModal
+                open={deleteId !== null}
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteId(null)}
+            />
+
+            <Toast message={toast} />
+
+        </div>
+    );
 }
 
-setupDragAndDrop();
-loadCategories();
-loadTasks();
-loadCounts();
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
