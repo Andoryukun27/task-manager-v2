@@ -5,10 +5,10 @@ requireLogin();
 require_once "db.php";
 
 $method = $_SERVER["REQUEST_METHOD"];
-$uid    = (int) $_SESSION["user_id"];
-$id     = intval($_GET["id"] ?? 0);
+$uid = (int) $_SESSION["user_id"];
+$id = intval($_GET["id"] ?? 0);
 $action = $_GET["action"] ?? "";
-$input  = json_decode(file_get_contents("php://input"), true) ?? [];
+$input = json_decode(file_get_contents("php://input"), true) ?? [];
 
 if ($method === "GET" && $action === "counts") {
     $stmt = $conn->prepare("SELECT status, COUNT(*) AS n FROM tasks WHERE user_id = ? GROUP BY status");
@@ -26,43 +26,45 @@ if ($method === "GET" && $action === "counts") {
 }
 
 if ($method === "GET" && $id === 0 && $action === "") {
-    $filter      = $_GET["filter"] ?? "all";
-    $sort        = $_GET["sort"] ?? "created_at";
-    $offset      = max(0, intval($_GET["offset"] ?? 0));
+    $filter = $_GET["filter"] ?? "all";
+    $sort = $_GET["sort"] ?? "created_at";
+    $offset = max(0, intval($_GET["offset"] ?? 0));
     $category_id = max(0, intval($_GET["category_id"] ?? 0));
-    $search      = trim($_GET["search"] ?? "");
-    $fetch       = 11;
+    $search = trim($_GET["search"] ?? "");
+    $fetch = 11;
 
     $allowed_sorts = ["created_at", "due_date", "title", "sort_order"];
-    if (!in_array($sort, $allowed_sorts)) $sort = "created_at";
+    if (!in_array($sort, $allowed_sorts))
+        $sort = "created_at";
     $order = $sort === "title" ? "ASC" : "DESC";
 
-    $where  = "WHERE t.user_id = ?";
-    $types  = "i";
+    $where = "WHERE t.user_id = ?";
+    $types = "i";
     $params = [$uid];
 
     if ($filter === "pending" || $filter === "completed") {
-        $where   .= " AND t.status = ?";
-        $types   .= "s";
+        $where .= " AND t.status = ?";
+        $types .= "s";
         $params[] = $filter;
     }
 
     if ($category_id > 0) {
-        $where   .= " AND t.category_id = ?";
-        $types   .= "i";
+        $where .= " AND t.category_id = ?";
+        $types .= "i";
         $params[] = $category_id;
     }
 
     if ($search !== "") {
-        $like     = "%" . $search . "%";
-        $where   .= " AND (t.title LIKE ? OR t.description LIKE ?)";
-        $types   .= "ss";
+        $like = "%" . $search . "%";
+        $where .= " AND (t.title LIKE ? OR t.description LIKE ?)";
+        $types .= "ss";
         $params[] = $like;
         $params[] = $like;
     }
 
     if ($sort === "sort_order") {
-        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color
+        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color,
+                       (SELECT COUNT(*) FROM task_attachments WHERE task_id = t.id) AS attachment_count
                 FROM tasks t LEFT JOIN categories c ON t.category_id = c.id
                 $where ORDER BY t.sort_order ASC";
         $stmt = $conn->prepare($sql);
@@ -72,10 +74,11 @@ if ($method === "GET" && $id === 0 && $action === "") {
         $stmt->close();
         echo json_encode(["tasks" => $tasks, "has_more" => false]);
     } else {
-        $types   .= "ii";
+        $types .= "ii";
         $params[] = $fetch;
         $params[] = $offset;
-        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color
+        $sql = "SELECT t.*, c.name AS category_name, c.color AS category_color,
+                       (SELECT COUNT(*) FROM task_attachments WHERE task_id = t.id) AS attachment_count
                 FROM tasks t LEFT JOIN categories c ON t.category_id = c.id
                 $where ORDER BY t.$sort $order LIMIT ? OFFSET ?";
         $stmt = $conn->prepare($sql);
@@ -84,7 +87,8 @@ if ($method === "GET" && $id === 0 && $action === "") {
         $tasks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
         $has_more = count($tasks) === $fetch;
-        if ($has_more) array_pop($tasks);
+        if ($has_more)
+            array_pop($tasks);
         echo json_encode(["tasks" => $tasks, "has_more" => $has_more]);
     }
     exit;
@@ -92,10 +96,14 @@ if ($method === "GET" && $id === 0 && $action === "") {
 
 if ($method === "POST" && $action === "reorder") {
     $ids = $input["ids"] ?? [];
-    if (!is_array($ids)) { echo json_encode(["error" => "Invalid data"]); exit; }
+    if (!is_array($ids)) {
+        echo json_encode(["error" => "Invalid data"]);
+        exit;
+    }
     foreach ($ids as $order => $taskId) {
         $taskId = intval($taskId);
-        if (!$taskId) continue;
+        if (!$taskId)
+            continue;
         $stmt = $conn->prepare("UPDATE tasks SET sort_order = ? WHERE id = ? AND user_id = ?");
         $stmt->bind_param("iii", $order, $taskId, $uid);
         $stmt->execute();
@@ -106,10 +114,10 @@ if ($method === "POST" && $action === "reorder") {
 }
 
 if ($method === "POST" && $action === "") {
-    $title       = trim($input["title"] ?? "");
+    $title = trim($input["title"] ?? "");
     $description = trim($input["description"] ?? "");
-    $due_date    = $input["due_date"] ?: null;
-    $priority    = $input["priority"] ?? "medium";
+    $due_date = $input["due_date"] ?: null;
+    $priority = $input["priority"] ?? "medium";
     $category_id = intval($input["category_id"] ?? 0) ?: null;
 
     if (!$title) {
@@ -136,10 +144,10 @@ if ($method === "POST" && $action === "") {
 }
 
 if ($method === "PUT" && $id > 0) {
-    $title       = trim($input["title"] ?? "");
+    $title = trim($input["title"] ?? "");
     $description = trim($input["description"] ?? "");
-    $due_date    = $input["due_date"] ?: null;
-    $priority    = $input["priority"] ?? "medium";
+    $due_date = $input["due_date"] ?: null;
+    $priority = $input["priority"] ?? "medium";
     $category_id = intval($input["category_id"] ?? 0) ?: null;
 
     if (!$title) {

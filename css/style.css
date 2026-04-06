@@ -903,3 +903,128 @@ body {
     box-shadow: none;
     border-style: dashed;
 }
+
+.attachment-panel {
+    border-top: 1px solid var(--border);
+    margin-top: 14px;
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.att-icon {
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.att-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.att-name:hover {
+    text-decoration: underline;
+}
+
+.att-size {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.att-delete {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.att-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+/* The label acts as the visible button; the real file input is hidden inside it */
+.att-upload-label {
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.att-file-input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+}
+
+.att-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.att-empty,
+.att-loading {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 2px 0;
+}
+
+.att-error {
+    font-size: 13px;
+    color: var(--danger);
+    padding: 6px 10px;
+    background: var(--danger-light);
+    border-radius: var(--radius-sm);
+}
+
+/* Badge showing attachment count on the paperclip button */
+.attach-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 4px;
+    margin-left: 2px;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.icon-btn.attach.active {
+    color: var(--accent);
+    background: var(--accent-light);
+    border-color: var(--accent);
+}
+
+.icon-btn.attach:hover {
+    color: var(--accent);
+    background: var(--accent-light);
+    border-color: var(--accent);
+}

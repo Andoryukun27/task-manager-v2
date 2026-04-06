@@ -1,14 +1,7 @@
 const { useState, useEffect, useRef } = React;
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
-//
-// These replace all the fetch() calls scattered through the old app.js.
-// Each function maps to one HTTP method. They all send/receive JSON.
-//
-// The old code used FormData (key=value pairs, like HTML forms).
-// REST APIs use JSON bodies instead — that's what Content-Type: application/json
-// and JSON.stringify() do here.
-//
+
 async function apiGet(url) {
     const res = await fetch(url);
     if (res.status === 204) return null;
@@ -42,6 +35,30 @@ async function apiDelete(url) {
     await fetch(url, { method: "DELETE" });
 }
 
+// ─── apiUpload ────────────────────────────────────────────────────────────────
+//
+// This is the one place in the app that does NOT use JSON.
+// Files are binary data — they cannot be serialised into a JSON string.
+//
+// FormData builds a multipart/form-data request, the same encoding a plain
+// HTML <input type="file"> form uses. We must NOT set Content-Type manually;
+// the browser sets it automatically and includes the required "boundary"
+// string that separates the parts of the request body.
+//
+// On the PHP side, this is why the file ends up in $_FILES instead of
+// php://input, and why task_id is sent as a query-string param rather than
+// inside the body.
+//
+async function apiUpload(taskId, file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`uploads.php?task_id=${taskId}`, {
+        method: "POST",
+        body: fd,
+    });
+    return res.json();
+}
+
 // ─── Utility ──────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr) {
@@ -52,23 +69,35 @@ function formatDate(dateStr) {
 
 function getDateStatus(due_date, status) {
     if (!due_date || status === "completed") return "";
-    const today    = new Date();
+    const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-    if (due_date < todayStr)    return "overdue";
-    if (due_date === todayStr)  return "due-today";
+    if (due_date < todayStr) return "overdue";
+    if (due_date === todayStr) return "due-today";
     if (due_date === tomorrowStr) return "due-soon";
     return "";
 }
 
+// Returns a human-readable file size string.
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Returns an emoji representing the file type based on its MIME type.
+function fileIcon(mime) {
+    if (mime.startsWith("image/")) return "🖼️";
+    if (mime === "application/pdf") return "📄";
+    if (mime.includes("spreadsheet") || mime.includes("excel")) return "📊";
+    if (mime.includes("word") || mime.includes("document")) return "📝";
+    return "📎";
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
-//
-// In the old app, showToast() directly manipulated a DOM element.
-// Here, `message` is a piece of React state. When it's set, the component
-// re-renders with the "show" class. When it's cleared, the class is removed.
-//
+
 function Toast({ message }) {
     return <div className={`toast ${message ? "show" : ""}`}>{message}</div>;
 }
@@ -94,27 +123,128 @@ function DeleteModal({ open, onConfirm, onCancel }) {
     );
 }
 
+// ─── AttachmentsPanel ─────────────────────────────────────────────────────────
+//
+// Rendered inside a TaskCard when the user clicks the paperclip button.
+// It fetches its own data lazily (only when first opened) rather than
+// loading attachments for every task up front.
+//
+// onCountChange lets this component tell its parent TaskCard the current
+// attachment count so the badge stays accurate after uploads and deletes.
+//
+function AttachmentsPanel({ taskId, onCountChange }) {
+    const [attachments, setAttachments] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState("");
+    const fileRef = useRef(null);
+
+    useEffect(() => {
+        apiGet(`uploads.php?task_id=${taskId}`).then(data => {
+            setAttachments(data);
+            onCountChange(data.length);
+        });
+    }, [taskId]);
+
+    async function handleUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        setError("");
+        setUploading(true);
+        const data = await apiUpload(taskId, file);
+        if (data.error) {
+            setError(data.error);
+        } else {
+            const updated = await apiGet(`uploads.php?task_id=${taskId}`);
+            setAttachments(updated);
+            onCountChange(updated.length);
+        }
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = "";
+    }
+
+    async function handleDelete(attId) {
+        await apiDelete(`uploads.php?id=${attId}`);
+        const updated = attachments.filter(a => a.id !== attId);
+        setAttachments(updated);
+        onCountChange(updated.length);
+    }
+
+    if (attachments === null) {
+        return <div className="attachment-panel"><p className="att-loading">Loading…</p></div>;
+    }
+
+    return (
+        <div className="attachment-panel">
+            {error && <p className="att-error">{error}</p>}
+
+            {attachments.length === 0 && (
+                <p className="att-empty">No attachments yet.</p>
+            )}
+
+            {attachments.map(a => (
+                <div className="attachment-item" key={a.id}>
+                    <span className="att-icon">{fileIcon(a.mime_type)}</span>
+                    <a
+                        className="att-name"
+                        href={`uploads/${a.stored_name}`}
+                        download={a.original_name}
+                        target="_blank"
+                    >
+                        {a.original_name}
+                    </a>
+                    <span className="att-size">{formatFileSize(a.file_size)}</span>
+                    <button
+                        className="icon-btn delete att-delete"
+                        onClick={() => handleDelete(a.id)}
+                        title="Remove attachment"
+                    >
+                        🗑
+                    </button>
+                </div>
+            ))}
+
+            <div className="att-upload-row">
+                <label className={`btn btn-ghost btn-sm att-upload-label ${uploading ? "disabled" : ""}`}>
+                    {uploading ? "Uploading…" : "＋ Attach file"}
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        className="att-file-input"
+                        onChange={handleUpload}
+                        disabled={uploading}
+                    />
+                </label>
+                <span className="att-hint">Images, PDF, Word, Excel · max 5 MB</span>
+            </div>
+        </div>
+    );
+}
+
 // ─── TaskCard ─────────────────────────────────────────────────────────────────
 //
-// In the old app, buildTaskCard() built a DOM element and returned it.
-// Here, TaskCard is a function that returns JSX — React's HTML-like syntax.
-// JSX looks like HTML but it compiles to JavaScript. For example:
-//   <div className="task-card"> becomes React.createElement("div", {className: "task-card"})
+// Two pieces of local state are added:
+//   showAttachments — whether the AttachmentsPanel is currently expanded
+//   attachmentCount — local copy of the count so the badge updates
+//                     without re-fetching the whole task list
 //
-// Note: React uses "className" instead of "class" because "class" is a
-// reserved word in JavaScript.
+// The count starts from task.attachment_count, which is injected by the
+// SQL subquery we added to tasks.php. When AttachmentsPanel calls
+// onCountChange after an upload or delete, we update our local copy.
 //
 function TaskCard({ task, onEdit, onDelete, onToggle }) {
+    const [showAttachments, setShowAttachments] = useState(false);
+    const [attachmentCount, setAttachmentCount] = useState(Number(task.attachment_count) || 0);
+
     const dateStatus = getDateStatus(task.due_date, task.status);
-    const cardClass  = [
+    const cardClass = [
         "task-card",
         task.status === "completed" ? "completed" : (dateStatus || ""),
     ].filter(Boolean).join(" ");
 
     const dateLabels = {
-        overdue:    " (overdue)",
+        overdue: " (overdue)",
         "due-today": " — Due today",
-        "due-soon":  " — Due tomorrow",
+        "due-soon": " — Due tomorrow",
     };
 
     return (
@@ -142,32 +272,40 @@ function TaskCard({ task, onEdit, onDelete, onToggle }) {
                     </div>
                 </div>
                 <div className="task-actions">
-                    <button className="icon-btn edit"   onClick={() => onEdit(task)}     title="Edit">✏</button>
+                    <button
+                        className={`icon-btn attach ${showAttachments ? "active" : ""}`}
+                        onClick={() => setShowAttachments(v => !v)}
+                        title="Attachments"
+                    >
+                        📎{attachmentCount > 0 && (
+                            <span className="attach-count">{attachmentCount}</span>
+                        )}
+                    </button>
+                    <button className="icon-btn edit" onClick={() => onEdit(task)} title="Edit">✏</button>
                     <button className="icon-btn delete" onClick={() => onDelete(task.id)} title="Delete">🗑</button>
                 </div>
             </div>
+
+            {showAttachments && (
+                <AttachmentsPanel
+                    taskId={task.id}
+                    onCountChange={setAttachmentCount}
+                />
+            )}
         </div>
     );
 }
 
 // ─── TaskForm ─────────────────────────────────────────────────────────────────
-//
-// This component manages its own local state for each field.
-// When `editing` changes (user clicks Edit on a task), a useEffect syncs
-// the form fields to that task's data.
-//
-// "Controlled inputs" is a key React concept: the input's value is always
-// driven by a state variable, and onChange updates that state variable.
-// This is the opposite of reading from the DOM when the form is submitted.
-//
+
 function TaskForm({ editing, categories, onSubmit, onCancel, onCategoryCreate }) {
-    const [title,       setTitle]       = useState("");
-    const [desc,        setDesc]        = useState("");
-    const [due,         setDue]         = useState("");
-    const [priority,    setPriority]    = useState("medium");
-    const [categoryId,  setCategoryId]  = useState("");
-    const [showNewCat,  setShowNewCat]  = useState(false);
-    const [newCatName,  setNewCatName]  = useState("");
+    const [title, setTitle] = useState("");
+    const [desc, setDesc] = useState("");
+    const [due, setDue] = useState("");
+    const [priority, setPriority] = useState("medium");
+    const [categoryId, setCategoryId] = useState("");
+    const [showNewCat, setShowNewCat] = useState(false);
+    const [newCatName, setNewCatName] = useState("");
     const [newCatColor, setNewCatColor] = useState("blue");
 
     useEffect(() => {
@@ -281,28 +419,21 @@ function TaskForm({ editing, categories, onSubmit, onCancel, onCategoryCreate })
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
-//
-// This is the root component. All shared state lives here.
-// Child components receive data as "props" and call callback functions
-// (like onEdit, onDelete) to ask the parent to update state.
-//
-// This pattern — state up, callbacks down — is called "lifting state up"
-// and is the core data-flow pattern in React.
-//
+
 function App() {
-    const [tasks,          setTasks]          = useState([]);
-    const [categories,     setCategories]     = useState([]);
-    const [counts,         setCounts]         = useState({ all: 0, pending: 0, completed: 0 });
-    const [filter,         setFilter]         = useState("all");
+    const [tasks, setTasks] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [counts, setCounts] = useState({ all: 0, pending: 0, completed: 0 });
+    const [filter, setFilter] = useState("all");
     const [categoryFilter, setCategoryFilter] = useState(0);
-    const [sort,           setSort]           = useState("created_at");
-    const [search,         setSearch]         = useState("");
-    const [offset,         setOffset]         = useState(0);
-    const [hasMore,        setHasMore]        = useState(false);
-    const [editing,        setEditing]        = useState(null);
-    const [deleteId,       setDeleteId]       = useState(null);
-    const [toast,          setToast]          = useState("");
-    const [refreshKey,     setRefreshKey]     = useState(0);
+    const [sort, setSort] = useState("created_at");
+    const [search, setSearch] = useState("");
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [deleteId, setDeleteId] = useState(null);
+    const [toast, setToast] = useState("");
+    const [refreshKey, setRefreshKey] = useState(0);
     const searchTimer = useRef(null);
 
     function showToast(msg) {
@@ -314,17 +445,10 @@ function App() {
         setRefreshKey(k => k + 1);
     }
 
-    // Load tasks whenever filter, category, sort, search, or refreshKey changes.
-    // useEffect runs after every render where one of its dependencies changed.
-    // The empty second argument [] would mean "run once on mount".
     useEffect(() => {
         async function load() {
             const params = new URLSearchParams({
-                filter,
-                sort,
-                offset: 0,
-                category_id: categoryFilter,
-                search,
+                filter, sort, offset: 0, category_id: categoryFilter, search,
             });
             const data = await apiGet(`tasks.php?${params}`);
             setTasks(data.tasks);
