@@ -18,10 +18,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $password = $_POST["password"] ?? "";
 
     if ($mode === "register") {
-        if ($username === "" || $password === "") {
+        $email = trim($_POST["email"] ?? "");
+        if ($username === "" || $password === "" || $email === "") {
             $error = "All fields are required.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = "Please enter a valid email address.";
         } elseif (strlen($password) < 6) {
             $error = "Password must be at least 6 characters.";
+        }
+        $email = trim($_POST["email"] ?? "");
+        if ($email !== "" && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = "Please enter a valid email address.";
         } else {
             $check = $conn->prepare("SELECT id FROM users WHERE username = ?");
             $check->bind_param("s", $username);
@@ -31,11 +38,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if ($check->num_rows > 0) {
                 $error = "That username is already taken.";
             } else {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                $ins = $conn->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
-                $ins->bind_param("ss", $username, $hash);
-                $ins->execute();
-                $ins->close();
+                $email = trim($_POST["email"] ?? "");
+                if ($email !== "" && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = "Please enter a valid email address.";
+                } else {
+                    $hash = password_hash($password, PASSWORD_DEFAULT);
+                    $ins = $conn->prepare("INSERT INTO users (username, password, email) VALUES (?, ?, ?)");
+                    $ins->bind_param("sss", $username, $hash, $email);
+                    $ins->execute();
+                    $ins->close();
+                }
                 $success = "Account created. You can now sign in.";
                 $mode = "login";
             }
@@ -66,14 +78,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaskFlow — <?= $mode === "register" ? "Register" : "Sign In" ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <div class="auth-shell">
         <div class="auth-card">
@@ -85,7 +100,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             <div class="auth-tabs">
                 <a href="login.php" class="auth-tab <?= $mode !== "register" ? "active" : "" ?>">Sign In</a>
-                <a href="login.php?mode=register" class="auth-tab <?= $mode === "register" ? "active" : "" ?>">Register</a>
+                <a href="login.php?mode=register"
+                    class="auth-tab <?= $mode === "register" ? "active" : "" ?>">Register</a>
             </div>
 
             <?php if ($error): ?>
@@ -105,11 +121,28 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         value="<?= htmlspecialchars($_POST["username"] ?? "") ?>" autocomplete="username" required>
                 </div>
 
+                <?php if ($mode === "register"): ?>
+                    <div class="field-group">
+                        <label for="email">Email address</label>
+                        <input type="email" name="email" id="email" placeholder="you@example.com"
+                            value="<?= htmlspecialchars($_POST["email"] ?? "") ?>" autocomplete="email" required>
+                    </div>
+                <?php endif; ?>
+
                 <div class="field-group">
-                    <label for="password">Password <?= $mode === "register" ? '<span class="auth-hint">(min. 6 characters)</span>' : "" ?></label>
+                    <label for="password">Password
+                        <?= $mode === "register" ? '<span class="auth-hint">(min. 6 characters)</span>' : "" ?></label>
                     <input type="password" name="password" id="password" placeholder="Enter your password"
                         autocomplete="<?= $mode === "register" ? "new-password" : "current-password" ?>" required>
                 </div>
+
+                <?php if ($mode === "register"): ?>
+                    <div class="field-group">
+                        <label for="email">Email <span class="auth-hint">(for due-date reminders — optional)</span></label>
+                        <input type="email" name="email" id="email" placeholder="you@example.com"
+                            value="<?= htmlspecialchars($_POST["email"] ?? "") ?>" autocomplete="email">
+                    </div>
+                <?php endif; ?>
 
                 <button type="submit" class="btn btn-primary auth-submit">
                     <?= $mode === "register" ? "Create Account" : "Sign In" ?>
@@ -119,4 +152,5 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
     </div>
 </body>
+
 </html>

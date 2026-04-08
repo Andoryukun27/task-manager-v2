@@ -1,5 +1,6 @@
 # Database credentials — never commit real passwords
 db.php
+mail_config.php
 
 # Environment config files
 .env
@@ -28,3 +29,4 @@ error_log
 # Node (if you ever add a build tool)
 node_modules/
 package-lock.json
+mailer.php
